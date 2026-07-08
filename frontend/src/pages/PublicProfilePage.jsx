@@ -24,7 +24,7 @@ export default function PublicProfilePage() {
   if (!profile) return <p className="text-center mt-20">Loading...</p>;
 
   const theme = themeStyles[profile.theme] || themeStyles.default;
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api';
 
   return (
     <div className={`min-h-screen flex flex-col items-center pt-16 ${theme}`}>
