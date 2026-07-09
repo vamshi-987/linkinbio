@@ -6,6 +6,7 @@ import com.backend.libserver.link.dto.LinkResponse;
 import com.backend.libserver.link.dto.UpdateLinkRequest;
 import com.backend.libserver.link.repository.LinkRepository;
 import com.backend.libserver.link.service.LinkService;
+import com.backend.libserver.profile.service.ProfileService;
 import com.backend.libserver.user.domain.User;
 import com.backend.libserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -25,10 +26,9 @@ import java.util.stream.Collectors;
 public class LinkServiceImpl implements LinkService {
 
     private final LinkRepository linkRepository;
-
     private final UserRepository userRepository;
+    private final ProfileService profileService;
 
-    @Override
     public List<LinkResponse> getLinksForUser(UUID userId) {
         return linkRepository.findAllByUserIdOrderByPositionAsc(userId)
                 .stream().map(LinkResponse::from).collect(Collectors.toList());
@@ -47,7 +47,9 @@ public class LinkServiceImpl implements LinkService {
         link.setUrl(req.url());
         link.setPosition(nextPosition);
 
-        return LinkResponse.from(linkRepository.save(link));
+        Link saved = linkRepository.save(link);
+        profileService.evictProfileCache(user.getUsername());
+        return LinkResponse.from(saved);
     }
 
     @Transactional
@@ -56,13 +58,18 @@ public class LinkServiceImpl implements LinkService {
         link.setTitle(req.title());
         link.setUrl(req.url());
         link.setActive(req.active());
-        return LinkResponse.from(linkRepository.save(link));
+
+        Link saved = linkRepository.save(link);
+        profileService.evictProfileCache(link.getUser().getUsername());
+        return LinkResponse.from(saved);
     }
 
     @Transactional
     public void delete(UUID userId, UUID linkId) {
         Link link = findOwnedLink(userId, linkId);
+        String username = link.getUser().getUsername();
         linkRepository.delete(link);
+        profileService.evictProfileCache(username);
     }
 
     @Transactional
@@ -82,6 +89,10 @@ public class LinkServiceImpl implements LinkService {
             link.setPosition(i);
         }
         linkRepository.saveAll(links);
+
+        if (!links.isEmpty()) {
+            profileService.evictProfileCache(links.get(0).getUser().getUsername());
+        }
     }
 
     private Link findOwnedLink(UUID userId, UUID linkId) {

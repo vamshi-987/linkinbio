@@ -5,4 +5,6 @@ import com.backend.libserver.profile.dto.PublicProfileResponse;
 public interface ProfileService {
 
      PublicProfileResponse getPublicProfile(String username);
+
+     void evictProfileCache(String username);
 }

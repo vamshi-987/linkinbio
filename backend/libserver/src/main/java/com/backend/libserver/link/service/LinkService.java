@@ -1,5 +1,6 @@
 package com.backend.libserver.link.service;
 
+import com.backend.libserver.link.domain.Link;
 import com.backend.libserver.link.dto.CreateLinkRequest;
 import com.backend.libserver.link.dto.LinkResponse;
 import com.backend.libserver.link.dto.UpdateLinkRequest;
@@ -18,4 +19,5 @@ public interface LinkService {
     void delete(UUID userId, UUID linkId);
 
     void reorder(UUID userId, List<UUID> orderedIds);
+
 }

@@ -8,6 +8,8 @@ import com.backend.libserver.profile.service.ProfileService;
 import com.backend.libserver.user.domain.User;
 import com.backend.libserver.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,6 +23,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final UserRepository userRepository;
     private final LinkRepository linkRepository;
 
+    @Cacheable(value = "publicProfiles", key = "#username")
     public PublicProfileResponse getPublicProfile(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new NoSuchElementException("Profile not found"));
@@ -39,5 +42,10 @@ public class ProfileServiceImpl implements ProfileService {
                 user.getTheme(),
                 linkResponses
         );
+    }
+
+    @CacheEvict(value = "publicProfiles", key = "#username")
+    public void evictProfileCache(String username) {
+        // annotation handles eviction — body intentionally empty
     }
 }
