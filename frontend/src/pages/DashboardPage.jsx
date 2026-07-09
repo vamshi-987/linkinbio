@@ -34,6 +34,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">Your links</h1>
         <div className="flex gap-3 text-sm">
           <Link to="/analytics">Analytics</Link>
+          <Link to="/settings">Settings</Link>
           <Link to={`/${username}`} target="_blank">View page</Link>
           <button onClick={logout}>Logout</button>
         </div>
