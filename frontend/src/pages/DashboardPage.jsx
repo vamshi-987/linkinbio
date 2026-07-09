@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getLinks, createLink, deleteLink, reorderLinks } from '../api/linksApi';
 import LinkForm from '../components/LinkForm';
 import LinkList from '../components/LinkList';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {
@@ -33,6 +33,7 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Your links</h1>
         <div className="flex gap-3 text-sm">
+          <Link to="/analytics">Analytics</Link>
           <Link to={`/${username}`} target="_blank">View page</Link>
           <button onClick={logout}>Logout</button>
         </div>
