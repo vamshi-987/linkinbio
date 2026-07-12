@@ -11,7 +11,7 @@ describe('LoginPage', () => {
         <AuthProvider><LoginPage /></AuthProvider>
       </BrowserRouter>
     );
-    expect(screen.getByPlaceholderText('username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Username or Email')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
   });
 });
