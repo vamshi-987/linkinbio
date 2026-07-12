@@ -31,8 +31,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(rateLimitFilter, JwtAuthFilter.class)
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, JwtAuthFilter.class);
         return http.build();
     }
 
