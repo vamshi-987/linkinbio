@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getLinks, createLink, deleteLink, reorderLinks } from '../api/linksApi';
+import { getLinks, createLink, updateLink, deleteLink, reorderLinks } from '../api/linksApi';
 import LinkForm from '../components/LinkForm';
 import LinkList from '../components/LinkList';
 import { useAuth } from '../context/useAuth';
@@ -14,6 +14,12 @@ export default function DashboardPage() {
   const handleAdd = async (data) => {
     const newLink = await createLink(data);
     setLinks([...links, newLink]);
+  };
+
+  const handleUpdate = async (id, data) => {
+    const existing = links.find(l => l.id === id);
+    const updated = await updateLink(id, { active: existing?.active ?? true, ...data });
+    setLinks(links.map(l => (l.id === id ? updated : l)));
   };
 
   const handleDelete = async (id) => {
@@ -42,6 +48,7 @@ export default function DashboardPage() {
       <LinkForm onAdd={handleAdd} />
       <LinkList
         links={links}
+        onUpdate={handleUpdate}
         onDelete={handleDelete}
         onMoveUp={(i) => i > 0 && swap(i, i - 1)}
         onMoveDown={(i) => i < links.length - 1 && swap(i, i + 1)}

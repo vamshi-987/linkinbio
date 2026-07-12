@@ -39,7 +39,10 @@ public class LinkServiceImpl implements LinkService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        int nextPosition = linkRepository.findAllByUserIdOrderByPositionAsc(userId).size();
+        List<Link> existing = linkRepository.findAllByUserIdOrderByPositionAsc(userId);
+        int nextPosition = existing.isEmpty()
+                ? 0
+                : existing.get(existing.size() - 1).getPosition() + 1;
 
         Link link = new Link();
         link.setUser(user);
