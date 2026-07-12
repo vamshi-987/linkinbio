@@ -2,6 +2,7 @@ package com.backend.libserver.profile.service.impl;
 
 import com.backend.libserver.profile.dto.UpdateProfileRequest;
 import com.backend.libserver.profile.service.ProfileService;
+import com.backend.libserver.profile.service.ProfileSettingsService;
 import com.backend.libserver.user.domain.User;
 import com.backend.libserver.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -13,11 +14,12 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class ProfileSettingsServiceImpl {
+public class ProfileSettingsServiceImpl implements ProfileSettingsService {
 
     private final UserRepository userRepository;
     private final ProfileService profileService;
 
+    @Override
     @Transactional
     public void updateProfile(UUID userId, UpdateProfileRequest req) {
         User user = userRepository.findById(userId)
