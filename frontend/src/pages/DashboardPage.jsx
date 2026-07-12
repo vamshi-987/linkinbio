@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getLinks, createLink, deleteLink, reorderLinks } from '../api/linksApi';
 import LinkForm from '../components/LinkForm';
 import LinkList from '../components/LinkList';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {

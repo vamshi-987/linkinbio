@@ -4,6 +4,7 @@ import com.backend.libserver.analytics.AnalyticsSummary;
 import com.backend.libserver.analytics.DailyClickProjection;
 import com.backend.libserver.analytics.LinkClickProjection;
 import com.backend.libserver.analytics.repository.ClickEventRepository;
+import com.backend.libserver.analytics.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,10 +15,11 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class AnalyticsServiceImpl {
+public class AnalyticsServiceImpl implements AnalyticsService {
 
     private final ClickEventRepository clickEventRepository;
 
+    @Override
     public AnalyticsSummary getSummary(UUID userId) {
         Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
 
