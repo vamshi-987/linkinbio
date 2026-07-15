@@ -194,7 +194,6 @@ export default function AnalyticsPage() {
                   type="monotone" dataKey="clicks" legendType="none" tooltipType="none"
                   stroke="none" fill="url(#an-fill)" isAnimationActive={false}
                 />
-l
               </ComposedChart>
             </ResponsiveContainer>
             <TableView
