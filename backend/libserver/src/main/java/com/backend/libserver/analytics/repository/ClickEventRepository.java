@@ -28,11 +28,11 @@ public interface ClickEventRepository extends JpaRepository<ClickEvent,Long> {
     @Query(value = """
         SELECT l.id as linkId, l.title as title, COUNT(c.id) as clicks
         FROM links l
-        LEFT JOIN click_events c ON c.link_id = l.id
+        LEFT JOIN click_events c ON c.link_id = l.id AND c.clicked_at >= :since
         WHERE l.user_id = :userId
         GROUP BY l.id, l.title
-        ORDER BY clicks DESC
+        ORDER BY clicks DESC, l.title ASC
         """, nativeQuery = true)
-    List<LinkClickProjection> getClicksPerLink(@Param("userId") UUID userId);
+    List<LinkClickProjection> getClicksPerLink(@Param("userId") UUID userId, @Param("since") Instant since);
 
 }
