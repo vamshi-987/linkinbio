@@ -1,5 +1,6 @@
 package com.backend.libserver.profile.service.impl;
 
+import com.backend.libserver.profile.dto.ProfileSettingsResponse;
 import com.backend.libserver.profile.dto.UpdateProfileRequest;
 import com.backend.libserver.profile.service.ProfileService;
 import com.backend.libserver.profile.service.ProfileSettingsService;
@@ -21,12 +22,21 @@ public class ProfileSettingsServiceImpl implements ProfileSettingsService {
 
     @Override
     @Transactional
+    public ProfileSettingsResponse getProfile(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        return new ProfileSettingsResponse(user.getDisplayName(), user.getBio(), user.getTheme());
+    }
+
+    @Override
+    @Transactional
     public void updateProfile(UUID userId, UpdateProfileRequest req) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        if (req.displayName() != null) user.setDisplayName(req.displayName());
-        if (req.bio() != null) user.setBio(req.bio());
+        if (req.displayName() != null) user.setDisplayName(req.displayName().trim());
+        if (req.bio() != null) user.setBio(req.bio().trim());
         if (req.theme() != null) user.setTheme(req.theme());
 
         userRepository.save(user);

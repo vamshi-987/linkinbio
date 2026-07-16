@@ -32,6 +32,12 @@ export default function LoginPage() {
       await login(username, password);
       navigate('/dashboard');
     } catch (err) {
+      // Credentials were right but the email was never confirmed: the backend has just sent a
+      // fresh code, so send the user straight to the verification step.
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        navigate(`/verify-email?email=${encodeURIComponent(err.response.data.email)}`);
+        return;
+      }
       setError(err.response?.data?.error || 'Login failed');
     }
   };
@@ -64,6 +70,9 @@ export default function LoginPage() {
             />
           </div>
           {error && <p className="login-error">{error}</p>}
+          <div className="login-forgot">
+            <Link to="/forgot-password" className="login-link">Forgot password?</Link>
+          </div>
           <button className="login-button" type="submit">Log In</button>
         </form>
         <p className="login-footer">
@@ -164,6 +173,11 @@ const loginStyles = `
     margin: 0;
     font-size: 14px;
     color: #ff6b6b;
+  }
+  .login-forgot {
+    margin: -6px 0 2px;
+    text-align: right;
+    font-size: 14px;
   }
   .login-footer {
     margin: 22px 0 0;

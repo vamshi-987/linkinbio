@@ -39,7 +39,8 @@ export default function SignupPage() {
     setError('');
     try {
       await signup(username, email, password);
-      navigate('/dashboard');
+      // The account exists but is unverified until the emailed code is confirmed.
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed');
     }

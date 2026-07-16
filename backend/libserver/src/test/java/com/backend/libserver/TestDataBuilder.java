@@ -12,6 +12,7 @@ public class TestDataBuilder {
         user.setUsername(username);
         user.setEmail(username + "@test.com");
         user.setPasswordHash("hashed");
+        user.setEmailVerified(true);
         user.setCreatedAt(Instant.now());
         return user;
     }

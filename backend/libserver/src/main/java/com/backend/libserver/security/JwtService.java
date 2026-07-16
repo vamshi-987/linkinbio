@@ -47,6 +47,31 @@ public class JwtService {
         return UUID.fromString(extractAllClaims(token).getSubject());
     }
 
+    /** Short-lived token issued after OTP verification; only valid for resetting a password. */
+    public String generatePasswordResetToken(UUID userId, long expirationMinutes) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + expirationMinutes * 60_000L);
+        return Jwts.builder()
+                .subject(userId.toString())
+                .claim("purpose", "password_reset")
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(signingKey())
+                .compact();
+    }
+
+    /**
+     * Validates a password-reset token and returns the user id, or throws if the token is
+     * invalid, expired, or not a password-reset token.
+     */
+    public UUID extractPasswordResetUserId(String token) {
+        Claims claims = extractAllClaims(token);
+        if (!"password_reset".equals(claims.get("purpose", String.class))) {
+            throw new IllegalArgumentException("Invalid reset token");
+        }
+        return UUID.fromString(claims.getSubject());
+    }
+
     public boolean isTokenValid(String token) {
         try {
             return extractAllClaims(token).getExpiration().after(new Date());

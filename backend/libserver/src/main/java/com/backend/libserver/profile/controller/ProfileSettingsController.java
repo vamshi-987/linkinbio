@@ -1,5 +1,6 @@
 package com.backend.libserver.profile.controller;
 
+import com.backend.libserver.profile.dto.ProfileSettingsResponse;
 import com.backend.libserver.profile.dto.UpdateProfileRequest;
 import com.backend.libserver.profile.service.ProfileSettingsService;
 import com.backend.libserver.security.UserPrincipal;
@@ -7,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProfileSettingsController {
 
     private final ProfileSettingsService profileSettingsService;
+
+    @GetMapping
+    public ResponseEntity<ProfileSettingsResponse> getProfile(@AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(profileSettingsService.getProfile(user.getId()));
+    }
 
     @PatchMapping
     public ResponseEntity<Void> updateProfile(@AuthenticationPrincipal UserPrincipal user,

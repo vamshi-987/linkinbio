@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { updateProfile } from '../api/profileApi';
+import { useEffect, useState } from 'react';
+import { getProfile, updateProfile } from '../api/profileApi';
 import { Link } from 'react-router-dom';
 
 const ContrastIcon = () => (
@@ -34,9 +34,32 @@ export default function SettingsPage() {
   const [bio, setBio] = useState('');
   const [theme, setTheme] = useState('default');
   const [saved, setSaved] = useState(false);
+  // Until the current values arrive, saving would PATCH empty strings over them and wipe the
+  // profile. Nothing is editable or submittable before then.
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        setDisplayName(profile.displayName ?? '');
+        setBio(profile.bio ?? '');
+        setTheme(profile.theme ?? 'default');
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!loaded) return;
     await updateProfile({ displayName, bio, theme });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -59,6 +82,7 @@ export default function SettingsPage() {
               className="settings-input"
               placeholder="Your Name"
               value={displayName}
+              disabled={!loaded}
               onChange={(e) => setDisplayName(e.target.value)}
             />
 
@@ -68,6 +92,7 @@ export default function SettingsPage() {
               className="settings-input settings-textarea"
               placeholder="Tell your audience about yourself..."
               value={bio}
+              disabled={!loaded}
               onChange={(e) => setBio(e.target.value)}
             />
           </section>
@@ -80,6 +105,7 @@ export default function SettingsPage() {
                   type="button"
                   key={id}
                   onClick={() => setTheme(id)}
+                  disabled={!loaded}
                   aria-pressed={theme === id}
                   className={`settings-theme${theme === id ? ' is-selected' : ''}`}
                 >
@@ -90,9 +116,24 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          <button className="settings-save" type="submit">Save</button>
+          <button className="settings-save" type="submit" disabled={!loaded}>
+            {loaded ? 'Save' : 'Loading…'}
+          </button>
           {saved && <p className="settings-saved">Saved!</p>}
+          {loadError && (
+            <p className="settings-error">
+              Couldn't load your profile. Refresh before editing — saving now would overwrite it.
+            </p>
+          )}
         </form>
+
+        <section className="settings-section settings-security">
+          <h2 className="settings-heading">Password</h2>
+          <p className="settings-help">
+            We'll email a verification code to your registered address, then let you set a new password.
+          </p>
+          <Link to="/forgot-password" className="settings-change-password">Change Password</Link>
+        </section>
       </div>
     </div>
   );
@@ -203,6 +244,14 @@ const settingsStyles = `
   .settings-theme:hover {
     background: #454a54;
   }
+  .settings-input:disabled,
+  .settings-theme:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .settings-theme:disabled:hover {
+    background: #3a3e46;
+  }
   .settings-theme.is-selected {
     background: #333944;
     border-color: #5b8def;
@@ -233,11 +282,50 @@ const settingsStyles = `
   .settings-save:active {
     filter: brightness(0.95);
   }
+  .settings-save:disabled {
+    background: #33415e;
+    color: #9aa0ab;
+    cursor: default;
+    filter: none;
+  }
   .settings-saved {
     margin: 12px 0 0;
     text-align: center;
     font-size: 15px;
     color: #4ade80;
+  }
+  .settings-error {
+    margin: 12px 0 0;
+    text-align: center;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #f87171;
+  }
+  .settings-security {
+    margin-top: 40px;
+    padding-top: 32px;
+    border-top: 1px solid #2f333c;
+  }
+  .settings-help {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #9aa0ab;
+  }
+  .settings-change-password {
+    display: inline-block;
+    padding: 12px 22px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #e8eaee;
+    text-decoration: none;
+    background: #3a3e46;
+    border: 1px solid #4c515b;
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+  .settings-change-password:hover {
+    background: #454a54;
   }
   @media (max-width: 600px) {
     .settings-container {
