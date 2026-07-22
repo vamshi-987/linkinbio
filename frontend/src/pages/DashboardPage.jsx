@@ -188,11 +188,16 @@ export default function DashboardPage() {
 
               <div className="dash-share-actions">
                 <button type="button" className="dash-share-btn is-primary" onClick={sharePage}>
-                  Share page
+                  Share my page
                 </button>
                 <button type="button" className="dash-share-btn" onClick={copyUrl}>
                   Copy link
                 </button>
+              </div>
+
+              {/* On its own row so the QR code reads as a second, optional way to share rather
+                  than a third peer of the buttons above it. */}
+              <div className="dash-share-actions is-qr-toggle">
                 <button
                   type="button"
                   className="dash-share-btn"
@@ -753,6 +758,9 @@ const dashboardStyles = `
     flex-wrap: wrap;
     justify-content: center;
     gap: 10px;
+  }
+  .dash-share-actions.is-qr-toggle {
+    margin-top: 10px;
   }
   .dash-share-btn {
     padding: 10px 20px;

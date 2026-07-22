@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { describeSchedule, STATUS_LABELS, toInstant, toLocalInput } from '../utils/schedule';
+import ConfirmDialog from './ConfirmDialog';
 
 const EditIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -50,6 +51,16 @@ const EyeOffIcon = () => (
   </svg>
 );
 
+const ImageOffIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 15V5a2 2 0 0 0-2-2H9" />
+    <path d="M3 7v12a2 2 0 0 0 2 2h12" />
+    <path d="m5 19 6-6" />
+    <path d="m2 2 20 20" />
+  </svg>
+);
+
 const TrashIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -76,6 +87,9 @@ export default function LinkList({
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState('');
+  // The link awaiting a delete confirmation, kept whole so the prompt can name it.
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   // One hidden file input, retargeted per row; the ref records which link is being uploaded to.
   const fileInputRef = useRef(null);
   const uploadingIdRef = useRef(null);
@@ -143,6 +157,29 @@ export default function LinkList({
       await onUploadThumbnail(linkId, file);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not upload that image.');
+    }
+  };
+
+  const removeThumbnail = async (linkId) => {
+    try {
+      setError('');
+      await onRemoveThumbnail(linkId);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not remove that thumbnail.');
+    }
+  };
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      setError('');
+      await onDelete(pendingDelete.id);
+      setPendingDelete(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not delete that link.');
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -233,15 +270,28 @@ export default function LinkList({
                   >
                     {link.active ? <EyeIcon /> : <EyeOffIcon />}
                   </button>
+                  {/* Always opens the picker, so an existing thumbnail can be swapped directly
+                      rather than having to be removed first. */}
                   <button
-                    onClick={() => (link.thumbnailUrl ? onRemoveThumbnail(link.id) : pickThumbnail(link.id))}
+                    onClick={() => pickThumbnail(link.id)}
                     className="link-icon-btn"
                     type="button"
-                    aria-label={link.thumbnailUrl ? 'Remove thumbnail' : 'Upload thumbnail'}
-                    title={link.thumbnailUrl ? 'Remove thumbnail' : 'Upload thumbnail'}
+                    aria-label={link.thumbnailUrl ? 'Change thumbnail' : 'Add thumbnail'}
+                    title={link.thumbnailUrl ? 'Change thumbnail' : 'Add thumbnail'}
                   >
                     <ImageIcon />
                   </button>
+                  {link.thumbnailUrl && (
+                    <button
+                      onClick={() => removeThumbnail(link.id)}
+                      className="link-icon-btn is-delete"
+                      type="button"
+                      aria-label="Remove thumbnail"
+                      title="Remove thumbnail"
+                    >
+                      <ImageOffIcon />
+                    </button>
+                  )}
                   <button
                     onClick={() => startEdit(link)}
                     className="link-icon-btn"
@@ -271,10 +321,11 @@ export default function LinkList({
                     </button>
                   </div>
                   <button
-                    onClick={() => onDelete(link.id)}
+                    onClick={() => setPendingDelete(link)}
                     className="link-icon-btn is-delete"
                     type="button"
                     aria-label="Delete link"
+                    title="Delete link"
                   >
                     <TrashIcon />
                   </button>
@@ -284,6 +335,17 @@ export default function LinkList({
           </li>
         ))}
       </ul>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete “${pendingDelete.title}”?`}
+          message="This link and its click history will be removed from your page. This cannot be undone."
+          confirmLabel="Delete link"
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </>
   );
 }
