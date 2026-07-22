@@ -8,9 +8,11 @@ import com.backend.libserver.link.service.LinkService;
 import com.backend.libserver.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +46,22 @@ public class LinkController {
     public ResponseEntity<Void> delete(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID id) {
         linkService.delete(user.getId(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Multipart rather than a JSON body with base64: base64 inflates the payload by a third and
+     * would have to be buffered as a String before it could be validated.
+     */
+    @PostMapping(value = "/{id}/thumbnail", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public LinkResponse uploadThumbnail(@AuthenticationPrincipal UserPrincipal user,
+                                        @PathVariable UUID id,
+                                        @RequestParam("file") MultipartFile file) {
+        return linkService.uploadThumbnail(user.getId(), id, file);
+    }
+
+    @DeleteMapping("/{id}/thumbnail")
+    public LinkResponse deleteThumbnail(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID id) {
+        return linkService.deleteThumbnail(user.getId(), id);
     }
 
     @PatchMapping("/reorder")

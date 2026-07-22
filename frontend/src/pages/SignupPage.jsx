@@ -39,7 +39,11 @@ export default function SignupPage() {
     setError('');
     try {
       await signup(username, email, password);
-      // The account exists but is unverified until the emailed code is confirmed.
+      // The signup is staged in Redis (no DB row yet) and expires there after this window. Stamp the
+      // absolute expiry so the verify page can send the user back to log in exactly when it lapses,
+      // even across refreshes. Keep this in sync with app.signup.pending-ttl-minutes on the backend.
+      const PENDING_TTL_MS = 30 * 60 * 1000;
+      localStorage.setItem('verifyExpiresAt', String(Date.now() + PENDING_TTL_MS));
       navigate(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed');

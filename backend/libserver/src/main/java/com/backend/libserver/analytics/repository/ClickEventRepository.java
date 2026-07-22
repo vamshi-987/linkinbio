@@ -1,5 +1,6 @@
 package com.backend.libserver.analytics.repository;
 
+import com.backend.libserver.analytics.BreakdownProjection;
 import com.backend.libserver.analytics.DailyClickProjection;
 import com.backend.libserver.analytics.LinkClickProjection;
 import com.backend.libserver.analytics.domain.ClickEvent;
@@ -34,5 +35,23 @@ public interface ClickEventRepository extends JpaRepository<ClickEvent,Long> {
         ORDER BY clicks DESC, l.title ASC
         """, nativeQuery = true)
     List<LinkClickProjection> getClicksPerLink(@Param("userId") UUID userId, @Param("since") Instant since);
+
+    /**
+     * Referrer host is intentionally not a rollup dimension — it is unbounded, and one viral source
+     * would multiply the rollup's row count per day. A top-N over the raw events stays cheap because
+     * the (link_id, clicked_at) index bounds the scan to the window.
+     */
+    @Query(value = """
+            SELECT c.referrer_host AS label, COUNT(*) AS clicks
+            FROM click_events c
+            JOIN links l ON l.id = c.link_id
+            WHERE l.user_id = :userId AND c.clicked_at >= :since
+            GROUP BY c.referrer_host
+            ORDER BY clicks DESC, label ASC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<BreakdownProjection> getTopReferrers(@Param("userId") UUID userId,
+                                              @Param("since") Instant since,
+                                              @Param("limit") int limit);
 
 }

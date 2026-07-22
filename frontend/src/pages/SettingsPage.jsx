@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getProfile, updateProfile } from '../api/profileApi';
+import { useEffect, useRef, useState } from 'react';
+import { deleteAvatar, getProfile, updateProfile, uploadAvatar } from '../api/profileApi';
 import { Link } from 'react-router-dom';
 
 const ContrastIcon = () => (
@@ -33,7 +33,12 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [theme, setTheme] = useState('default');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const avatarInputRef = useRef(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   // Until the current values arrive, saving would PATCH empty strings over them and wipe the
   // profile. Nothing is editable or submittable before then.
   const [loaded, setLoaded] = useState(false);
@@ -47,6 +52,7 @@ export default function SettingsPage() {
         setDisplayName(profile.displayName ?? '');
         setBio(profile.bio ?? '');
         setTheme(profile.theme ?? 'default');
+        setAvatarUrl(profile.avatarUrl ?? '');
         setLoaded(true);
       })
       .catch(() => {
@@ -60,9 +66,56 @@ export default function SettingsPage() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!loaded) return;
-    await updateProfile({ displayName, bio, theme });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError('');
+
+    if (!displayName.trim()) {
+      setSaveError('Display name cannot be empty.');
+      return;
+    }
+    if (!bio.trim()) {
+      setSaveError('Bio cannot be empty.');
+      return;
+    }
+
+    try {
+      await updateProfile({ displayName, bio, theme });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Could not save your changes. Please try again.');
+    }
+  };
+
+  const handleAvatarChosen = async (e) => {
+    const file = e.target.files?.[0];
+    // Cleared up front so re-picking the same file still fires a change event.
+    e.target.value = '';
+    if (!file) return;
+
+    setAvatarError('');
+    setAvatarBusy(true);
+    try {
+      const profile = await uploadAvatar(file);
+      setAvatarUrl(profile.avatarUrl ?? '');
+    } catch (err) {
+      // The server re-checks type, size and dimensions, so its message is the accurate one.
+      setAvatarError(err.response?.data?.error || 'Could not upload that image.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarError('');
+    setAvatarBusy(true);
+    try {
+      const profile = await deleteAvatar();
+      setAvatarUrl(profile.avatarUrl ?? '');
+    } catch {
+      setAvatarError('Could not remove your photo. Please try again.');
+    } finally {
+      setAvatarBusy(false);
+    }
   };
 
   return (
@@ -71,6 +124,46 @@ export default function SettingsPage() {
       <div className="settings-container">
         <Link to="/dashboard" className="settings-back">← Back</Link>
         <h1 className="settings-title">Account Settings</h1>
+
+        <section className="settings-section">
+          <h2 className="settings-heading">Profile Photo</h2>
+          <div className="settings-avatar-row">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Your profile" className="settings-avatar" />
+            ) : (
+              <div className="settings-avatar settings-avatar-empty" aria-hidden="true" />
+            )}
+            <div className="settings-avatar-actions">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={handleAvatarChosen}
+                hidden
+              />
+              <button
+                type="button"
+                className="settings-avatar-btn"
+                disabled={!loaded || avatarBusy}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {avatarBusy ? 'Working…' : avatarUrl ? 'Replace photo' : 'Upload photo'}
+              </button>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  className="settings-avatar-btn is-remove"
+                  disabled={avatarBusy}
+                  onClick={handleAvatarRemove}
+                >
+                  Remove
+                </button>
+              )}
+              <p className="settings-help">PNG or JPEG, up to 2 MB.</p>
+              {avatarError && <p className="settings-error" role="alert">{avatarError}</p>}
+            </div>
+          </div>
+        </section>
 
         <form onSubmit={handleSave} className="settings-form">
           <section className="settings-section">
@@ -120,6 +213,7 @@ export default function SettingsPage() {
             {loaded ? 'Save' : 'Loading…'}
           </button>
           {saved && <p className="settings-saved">Saved!</p>}
+          {saveError && <p className="settings-error">{saveError}</p>}
           {loadError && (
             <p className="settings-error">
               Couldn't load your profile. Refresh before editing — saving now would overwrite it.
@@ -178,6 +272,54 @@ const settingsStyles = `
   .settings-form {
     display: flex;
     flex-direction: column;
+  }
+  .settings-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .settings-avatar {
+    width: 88px;
+    height: 88px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid #3a3e46;
+  }
+  .settings-avatar-empty {
+    background: #23262d;
+  }
+  .settings-avatar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .settings-avatar-btn {
+    padding: 10px 18px;
+    font-family: inherit;
+    font-size: 15px;
+    color: #e8eaee;
+    background: #2b2f37;
+    border: 1px solid #3a3e46;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .settings-avatar-btn:hover:not(:disabled) {
+    background: #333944;
+  }
+  .settings-avatar-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .settings-avatar-btn.is-remove:hover:not(:disabled) {
+    color: #f87171;
+  }
+  .settings-avatar-actions .settings-help,
+  .settings-avatar-actions .settings-error {
+    flex-basis: 100%;
+    margin: 0;
   }
   .settings-section {
     margin-bottom: 36px;

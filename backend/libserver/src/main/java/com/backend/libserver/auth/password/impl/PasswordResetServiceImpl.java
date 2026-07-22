@@ -42,16 +42,16 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Override
     @Transactional
-    public void requestReset(String email) {
-        userRepository.findByEmailIgnoreCase(email.trim()).ifPresentOrElse(
+    public void requestReset(String username) {
+        userRepository.findByUsername(username.trim()).ifPresentOrElse(
                 user -> otpService.issue(user, OtpPurpose.PASSWORD_RESET),
-                () -> log.info("Password reset requested for unknown email; ignoring."));
+                () -> log.info("Password reset requested for unknown username; ignoring."));
     }
 
     @Override
     @Transactional
-    public String verifyOtp(String email, String otp) {
-        User user = userRepository.findByEmailIgnoreCase(email.trim())
+    public String verifyOtp(String username, String otp) {
+        User user = userRepository.findByUsername(username.trim())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired code"));
 
         otpService.verify(user, otp, OtpPurpose.PASSWORD_RESET);

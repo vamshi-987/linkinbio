@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { resendVerification } from '../api/authApi';
+import maskEmail from '../utils/maskEmail';
 
 const KeyIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -23,6 +24,24 @@ export default function VerifyEmailPage() {
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // The staged signup expires in Redis after a fixed window; once it lapses there is nothing left to
+  // verify, so send the user back to log in (where they can sign up again) exactly when it does.
+  useEffect(() => {
+    const raw = localStorage.getItem('verifyExpiresAt');
+    if (!raw) return undefined;
+    const remaining = Number(raw) - Date.now();
+    if (remaining <= 0) {
+      localStorage.removeItem('verifyExpiresAt');
+      navigate('/login', { replace: true });
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      localStorage.removeItem('verifyExpiresAt');
+      navigate('/login', { replace: true });
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [navigate]);
+
   const handleVerify = async (e) => {
     e.preventDefault();
     setError('');
@@ -33,6 +52,7 @@ export default function VerifyEmailPage() {
     setLoading(true);
     try {
       await verifyEmail(email, otp);
+      localStorage.removeItem('verifyExpiresAt');
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid or expired code.');
@@ -77,7 +97,7 @@ export default function VerifyEmailPage() {
       <div className="ve-card">
         <h1 className="ve-title">Verify Email</h1>
         <p className="ve-subtitle">
-          Enter the 6-digit code we sent to <strong>{email}</strong>.
+          Enter the 6-digit code sent to <strong>{maskEmail(email)}</strong>.
         </p>
 
         <form onSubmit={handleVerify} className="ve-form">

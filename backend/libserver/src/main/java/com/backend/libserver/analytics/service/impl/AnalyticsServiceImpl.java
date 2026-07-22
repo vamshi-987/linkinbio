@@ -1,9 +1,13 @@
 package com.backend.libserver.analytics.service.impl;
 
+import com.backend.libserver.analytics.AnalyticsBreakdown;
 import com.backend.libserver.analytics.AnalyticsSummary;
+import com.backend.libserver.analytics.BreakdownProjection;
+import com.backend.libserver.analytics.BreakdownSlice;
 import com.backend.libserver.analytics.DailyClick;
 import com.backend.libserver.analytics.DailyClickProjection;
 import com.backend.libserver.analytics.LinkClick;
+import com.backend.libserver.analytics.repository.ClickDailyRollupRepository;
 import com.backend.libserver.analytics.repository.ClickEventRepository;
 import com.backend.libserver.analytics.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +28,10 @@ import java.util.stream.IntStream;
 public class AnalyticsServiceImpl implements AnalyticsService {
 
     private static final int WINDOW_DAYS = 30;
+    private static final int TOP_REFERRERS = 10;
 
     private final ClickEventRepository clickEventRepository;
+    private final ClickDailyRollupRepository rollupRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -51,5 +57,36 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         long totalClicks = dailyClicks.stream().mapToLong(DailyClick::clicks).sum();
 
         return new AnalyticsSummary(totalClicks, WINDOW_DAYS, from, to, dailyClicks, clicksPerLink);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AnalyticsBreakdown getBreakdown(UUID userId) {
+        LocalDate to = LocalDate.now(ZoneOffset.UTC);
+        LocalDate from = to.minusDays(WINDOW_DAYS - 1L);
+
+        // Country and device come from the rollups: those groupings are fixed and low-cardinality,
+        // so they are worth pre-aggregating. Referrers are unbounded and read top-N from the raw
+        // events instead — the write-heavy table stays the source of truth for the long tail.
+        List<BreakdownSlice> byCountry = toSlices(rollupRepository.countryBreakdown(userId, from));
+        List<BreakdownSlice> byDevice = toSlices(rollupRepository.deviceBreakdown(userId, from));
+        List<BreakdownSlice> byReferrer = toSlices(clickEventRepository.getTopReferrers(
+                userId, from.atStartOfDay(ZoneOffset.UTC).toInstant(), TOP_REFERRERS));
+
+        return new AnalyticsBreakdown(
+                WINDOW_DAYS,
+                from,
+                to,
+                rollupRepository.totalClicksSince(userId, from),
+                byCountry,
+                byDevice,
+                byReferrer,
+                rollupRepository.lastRolledUpDay(userId));
+    }
+
+    private List<BreakdownSlice> toSlices(List<BreakdownProjection> rows) {
+        return rows.stream()
+                .map(r -> new BreakdownSlice(r.getLabel(), r.getClicks() == null ? 0L : r.getClicks()))
+                .toList();
     }
 }

@@ -9,27 +9,46 @@ const themes = {
   neon: { bg: '#05060a', text: '#39ff14', sub: '#7bffb0', btn: '#0d1f16', btnText: '#39ff14' },
 };
 
+/**
+ * Only a 404 means the page does not exist. Showing "not found" for a rate limit or a server error
+ * tells the visitor the creator has no page, which is simply wrong.
+ */
+const errorMessage = (err) => {
+  switch (err.response?.status) {
+    case 404: return 'Profile not found';
+    case 429: return 'Too many requests right now — please try again in a minute.';
+    default: return 'Could not load this page. Please try again.';
+  }
+};
+
 export default function PublicProfilePage() {
   const { username } = useParams();
-  const [profile, setProfile] = useState(null);
-  const [notFound, setNotFound] = useState(false);
+  // The result carries the username it belongs to, so navigating to another profile shows the
+  // loading state again instead of the previous page's profile or error.
+  const [result, setResult] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     axiosClient.get(`/public/${username}`)
-      .then((r) => setProfile(r.data))
-      .catch(() => setNotFound(true));
+      .then((r) => !cancelled && setResult({ username, profile: r.data }))
+      .catch((err) => !cancelled && setResult({ username, error: errorMessage(err) }));
+
+    return () => { cancelled = true; };
   }, [username]);
 
-  if (notFound) {
+  const current = result?.username === username ? result : null;
+
+  if (current?.error) {
     return (
       <div className="pp-screen" style={themeVars(themes.default)}>
         <style>{styles}</style>
-        <p className="pp-message">Profile not found</p>
+        <p className="pp-message" role="alert">{current.error}</p>
       </div>
     );
   }
 
-  if (!profile) {
+  if (!current) {
     return (
       <div className="pp-screen" style={themeVars(themes.default)}>
         <style>{styles}</style>
@@ -38,6 +57,7 @@ export default function PublicProfilePage() {
     );
   }
 
+  const { profile } = current;
   const theme = themes[profile.theme] || themes.default;
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api';
   const links = Array.isArray(profile.links) ? profile.links : [];
@@ -59,7 +79,10 @@ export default function PublicProfilePage() {
               href={`${apiBase}/public/click/${link.id}`}
               className="pp-link"
             >
-              {link.title}
+              {link.thumbnailUrl && (
+                <img src={link.thumbnailUrl} alt="" className="pp-link-thumb" loading="lazy" />
+              )}
+              <span className="pp-link-title">{link.title}</span>
             </a>
           ))}
         </div>
@@ -124,7 +147,9 @@ const styles = `
     margin-top: 44px;
   }
   .pp-link {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 14px;
     padding: 16px 20px;
     font-size: 19px;
     color: var(--pp-btn-text);
@@ -141,6 +166,18 @@ const styles = `
   .pp-link:active {
     transform: translateY(1px);
     filter: brightness(0.97);
+  }
+  .pp-link-thumb {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+  /* Centred with the thumbnail out of flow, so a link with an image and one without still line up. */
+  .pp-link-title {
+    flex: 1;
+    text-align: center;
   }
   .pp-message {
     font-size: 18px;

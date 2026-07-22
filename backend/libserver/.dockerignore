@@ -1,0 +1,11 @@
+# Build output is produced inside the image; copying the host's would both bloat the context and
+# risk shipping a stale jar.
+target/
+
+# Developer-machine uploads. Production reads from the S3 bucket.
+uploads/
+
+.git/
+.gitignore
+*.md
+.DS_Store

@@ -1,2 +1,24 @@
 .DS_Store
 .vscode/
+
+# ===== Secrets =====
+# Nothing carrying a real credential is ever committed; .env.example documents the keys instead.
+.env
+.env.*
+.env.example
+
+# ===== Java / Maven =====
+target/
+*.class
+*.log
+
+# ===== Node =====
+node_modules/
+dist/
+.vite/
+*.local
+
+# ===== Uploads =====
+# The local storage provider's directory. These are user data on a developer's machine, not source,
+# and production stores them in a bucket instead.
+uploads/

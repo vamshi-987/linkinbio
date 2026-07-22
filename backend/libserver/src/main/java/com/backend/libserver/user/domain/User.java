@@ -30,12 +30,13 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Column(name = "email_verified", nullable = false)
-    private boolean emailVerified = false;
-
     private String displayName;
     private String bio;
     private String avatarUrl;
+
+    /** Storage key behind {@link #avatarUrl} when the avatar was uploaded rather than linked. */
+    @Column(name = "avatar_key", length = 255)
+    private String avatarKey;
 
     @Column(nullable = false)
     private String theme = "default";

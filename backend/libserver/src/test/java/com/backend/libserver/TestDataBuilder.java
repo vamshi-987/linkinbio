@@ -12,7 +12,6 @@ public class TestDataBuilder {
         user.setUsername(username);
         user.setEmail(username + "@test.com");
         user.setPasswordHash("hashed");
-        user.setEmailVerified(true);
         user.setCreatedAt(Instant.now());
         return user;
     }
@@ -24,6 +23,15 @@ public class TestDataBuilder {
         link.setUrl("https://example.com/" + title.toLowerCase());
         link.setPosition(position);
         link.setActive(true);
+        return link;
+    }
+
+    /** A link with a scheduled visibility window; either bound may be null for "unbounded". */
+    public static Link aScheduledLink(User user, String title, int position,
+                                      Instant visibleFrom, Instant visibleUntil) {
+        Link link = aLink(user, title, position);
+        link.setVisibleFrom(visibleFrom);
+        link.setVisibleUntil(visibleUntil);
         return link;
     }
 }

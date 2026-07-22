@@ -8,7 +8,6 @@ import com.backend.libserver.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 
@@ -26,10 +25,10 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
 
     /**
-     * Creates the account in an unverified state and emails a code. No token is issued here — the
-     * caller must confirm the code via verify-email before the account can be used.
+     * Stages the signup and emails a code. Nothing is written to the users table here — the account
+     * is only created once the code is confirmed via verify-email (see EmailVerificationService), so
+     * an unverified account never exists in the database. No token is issued yet.
      */
-    @Transactional
     public void signup(SignupRequest req) {
         String username = req.username().toLowerCase();
 
@@ -44,32 +43,28 @@ public class AuthService {
             throw new IllegalArgumentException("Email already registered");
         }
 
-        User user = new User();
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(req.password()));
-        user.setEmailVerified(false);
-        user = userRepository.save(user);
-
-        emailVerificationService.sendCode(user);
+        emailVerificationService.startSignup(username, email, req.password());
     }
 
-    // Rejecting an unverified account throws *after* a fresh code has been issued; without this the
-    // rollback would delete that code and the email would contain a code that could never work.
-    @Transactional(noRollbackFor = EmailNotVerifiedException.class)
     public AuthResponse login(LoginRequest req) {
-        User user = userRepository.findByUsername(req.username().toLowerCase())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+        String username = req.username().toLowerCase();
 
-        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            // No account with that username — but there may be a pending (unverified) signup. Only
+            // reveal that, and resend its code, once the password matches, so this never leaks who
+            // has a signup in flight. Otherwise it is indistinguishable from wrong credentials.
+            emailVerificationService.pendingSignupByUsername(username)
+                    .filter(pending -> passwordEncoder.matches(req.password(), pending.passwordHash()))
+                    .ifPresent(pending -> {
+                        emailVerificationService.resendCode(pending.email());
+                        throw new EmailNotVerifiedException(pending.email());
+                    });
             throw new IllegalArgumentException("Invalid credentials");
         }
 
-        // Credentials are good but the address was never confirmed: send a fresh code and tell the
-        // client to route the user to the verification step.
-        if (!user.isEmailVerified()) {
-            emailVerificationService.sendCode(user);
-            throw new EmailNotVerifiedException(user.getEmail());
+        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Invalid credentials");
         }
 
         String token = jwtService.generateToken(user.getId(), user.getUsername());

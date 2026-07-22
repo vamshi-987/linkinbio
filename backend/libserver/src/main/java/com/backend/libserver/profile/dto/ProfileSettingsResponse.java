@@ -4,5 +4,6 @@ package com.backend.libserver.profile.dto;
 public record ProfileSettingsResponse(
         String displayName,
         String bio,
-        String theme
+        String theme,
+        String avatarUrl
 ) {}

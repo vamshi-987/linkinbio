@@ -1,0 +1,51 @@
+# Local development dependencies only — Postgres and Redis, nothing else. The backend and frontend
+# run on the host (./mvnw spring-boot:run, npm run dev) so both keep hot reload and a debugger.
+#
+#   docker compose up -d
+#
+# Ports, database name, and credentials match the defaults in application-local.properties, so a
+# backend started with the `local` profile connects with no extra environment.
+
+services:
+  postgres:
+    # Same image the Testcontainers integration tests use, so local behaviour matches the suite.
+    image: postgres:16-alpine
+    container_name: linkinbio-postgres
+    environment:
+      POSTGRES_DB: linkinbio
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # Deliberately not 5432. A developer machine very often already has something on the default
+    # port (Postgres.app, or another project's container), and connecting to the wrong database is
+    # a silent failure rather than a loud one. Override with POSTGRES_PORT if 5433 is also taken.
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Without this the backend can win the race to connect and die on startup, because the
+      # container reports "running" well before Postgres accepts connections.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d linkinbio"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: linkinbio-redis
+    # Not 6379, for the same reason as Postgres above.
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+# Named volumes, so `docker compose down` keeps your local accounts and links. Use
+# `docker compose down -v` to wipe and let Flyway rebuild the schema from scratch.
+volumes:
+  postgres-data:
+  redis-data:

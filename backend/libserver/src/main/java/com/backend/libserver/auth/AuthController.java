@@ -49,14 +49,14 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        passwordResetService.requestReset(req.email());
+        passwordResetService.requestReset(req.username());
         return ResponseEntity.ok(new MessageResponse(
-                "If an account exists for that email, a reset code has been sent."));
+                "If an account exists for that username, a reset code has been sent to its registered email."));
     }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<VerifyOtpResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest req) {
-        String resetToken = passwordResetService.verifyOtp(req.email(), req.otp());
+        String resetToken = passwordResetService.verifyOtp(req.username(), req.otp());
         return ResponseEntity.ok(new VerifyOtpResponse(resetToken));
     }
 

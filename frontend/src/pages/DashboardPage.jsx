@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { getLinks, createLink, updateLink, deleteLink, reorderLinks } from '../api/linksApi';
+import {
+  getLinks, createLink, updateLink, deleteLink, reorderLinks, uploadThumbnail, deleteThumbnail,
+} from '../api/linksApi';
 import LinkForm from '../components/LinkForm';
 import LinkList from '../components/LinkList';
 import { useAuth } from '../context/useAuth';
 import { Link } from 'react-router-dom';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api';
+
 export default function DashboardPage() {
   const [links, setLinks] = useState([]);
+  const [showQr, setShowQr] = useState(false);
+  const [reorderError, setReorderError] = useState('');
   const { username, logout } = useAuth();
 
   useEffect(() => {
@@ -20,22 +26,52 @@ export default function DashboardPage() {
     setLinks((prev) => [...prev, newLink]);
   };
 
+  const replace = (updated) =>
+    setLinks((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+
   const handleUpdate = async (id, data) => {
     const existing = links.find((l) => l.id === id);
     const updated = await updateLink(id, { active: existing?.active ?? true, ...data });
-    setLinks((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    replace(updated);
   };
+
+  const handleUploadThumbnail = async (id, file) => replace(await uploadThumbnail(id, file));
+
+  const handleRemoveThumbnail = async (id) => replace(await deleteThumbnail(id));
 
   const handleDelete = async (id) => {
     await deleteLink(id);
     setLinks((prev) => prev.filter((l) => l.id !== id));
   };
 
+  const handleToggleActive = async (id) => {
+    const link = links.find((l) => l.id === id);
+    if (!link) return;
+    // A full replacement, so every editable field has to be sent back, not just the flag.
+    replace(await updateLink(id, {
+      title: link.title,
+      url: link.url,
+      active: !link.active,
+      visibleFrom: link.visibleFrom ?? null,
+      visibleUntil: link.visibleUntil ?? null,
+    }));
+  };
+
   const swap = async (i, j) => {
+    const previous = links;
     const updated = [...links];
     [updated[i], updated[j]] = [updated[j], updated[i]];
+
+    // Applied optimistically so the arrows feel instant, then rolled back if the server rejects the
+    // order — otherwise the list keeps showing an arrangement that was never saved.
     setLinks(updated);
-    await reorderLinks(updated.map((l) => l.id));
+    setReorderError('');
+    try {
+      await reorderLinks(updated.map((l) => l.id));
+    } catch (err) {
+      setLinks(previous);
+      setReorderError(err.response?.data?.error || 'Could not save the new order. Please try again.');
+    }
   };
 
   return (
@@ -61,13 +97,47 @@ export default function DashboardPage() {
       <main className="dash-container">
         <h1 className="dash-title">Add New Link</h1>
         <LinkForm onAdd={handleAdd} />
+        {reorderError && <p className="link-list-error" role="alert">{reorderError}</p>}
         <LinkList
           links={links}
           onUpdate={handleUpdate}
           onDelete={handleDelete}
+          onToggleActive={handleToggleActive}
           onMoveUp={(i) => i > 0 && swap(i, i - 1)}
           onMoveDown={(i) => i < links.length - 1 && swap(i, i + 1)}
+          onUploadThumbnail={handleUploadThumbnail}
+          onRemoveThumbnail={handleRemoveThumbnail}
         />
+
+        <section className="dash-qr">
+          <button
+            type="button"
+            className="dash-qr-toggle"
+            aria-expanded={showQr}
+            onClick={() => setShowQr((on) => !on)}
+          >
+            {showQr ? 'Hide QR code' : 'Show QR code for my page'}
+          </button>
+          {showQr && (
+            <div className="dash-qr-body">
+              {/* Generated server-side and cached, so this is a plain image request. */}
+              <img
+                src={`${API_BASE}/public/qr/profile/${username}?size=320`}
+                alt={`QR code linking to ${username}'s page`}
+                className="dash-qr-image"
+                width="320"
+                height="320"
+              />
+              <a
+                className="dash-qr-download"
+                href={`${API_BASE}/public/qr/profile/${username}?size=1024`}
+                download={`${username}-qr.png`}
+              >
+                Download PNG
+              </a>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );
@@ -160,9 +230,57 @@ const dashboardStyles = `
   }
   .link-form {
     display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .link-form-row {
+    display: flex;
     align-items: stretch;
     gap: 16px;
-    margin-bottom: 32px;
+  }
+  .link-form-error,
+  .link-list-error {
+    margin: 0;
+    font-size: 14px;
+    color: #f87171;
+  }
+  .link-schedule-toggle {
+    align-self: flex-start;
+    padding: 0;
+    font-family: inherit;
+    font-size: 14px;
+    color: #9aa0ab;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  .link-schedule-toggle:hover {
+    color: #e8eaee;
+  }
+  .link-schedule-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 18px;
+    background: #23262d;
+    border: 1px solid #2f333c;
+    border-radius: 14px;
+  }
+  .link-schedule-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 200px;
+    font-size: 13px;
+    color: #9aa0ab;
+  }
+  .link-schedule-hint {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 13px;
+    color: #868b95;
   }
   .link-form-input {
     flex: 1;
@@ -228,7 +346,39 @@ const dashboardStyles = `
     border-bottom: none;
   }
   .link-info {
+    flex: 1;
     min-width: 0;
+  }
+  .link-thumb {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid #3a3e46;
+  }
+  .link-info-schedule {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #868b95;
+  }
+  .link-badge {
+    margin-left: 10px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    vertical-align: middle;
+    border-radius: 999px;
+    background: #2f333c;
+    color: #c8ccd3;
+  }
+  .link-badge.is-scheduled {
+    background: rgba(91, 141, 239, 0.18);
+    color: #9dc0ff;
+  }
+  .link-badge.is-expired {
+    background: rgba(248, 113, 113, 0.16);
+    color: #f8a5a5;
   }
   .link-info-title {
     margin: 0;
@@ -312,10 +462,57 @@ const dashboardStyles = `
   }
   .link-edit {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     flex: 1;
     min-width: 0;
+  }
+  .link-edit-schedule {
+    display: flex;
+    gap: 10px;
+    flex-basis: 100%;
+  }
+  .dash-qr {
+    margin-top: 28px;
+    text-align: center;
+  }
+  .dash-qr-toggle {
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 15px;
+    color: #c8ccd3;
+    background: #2b2f37;
+    border: 1px solid #3a3e46;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .dash-qr-toggle:hover {
+    background: #333944;
+    color: #f2f4f7;
+  }
+  .dash-qr-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .dash-qr-image {
+    max-width: 100%;
+    height: auto;
+    padding: 12px;
+    background: #fff;
+    border-radius: 14px;
+  }
+  .dash-qr-download {
+    font-size: 15px;
+    color: #9dc0ff;
+    text-decoration: none;
+  }
+  .dash-qr-download:hover {
+    text-decoration: underline;
   }
   .link-edit-input {
     flex: 1;
@@ -385,9 +582,12 @@ const dashboardStyles = `
       font-size: 34px;
       margin-bottom: 24px;
     }
-    .link-form {
+    .link-form-row {
       flex-direction: column;
       gap: 12px;
+    }
+    .link-edit-schedule {
+      flex-direction: column;
     }
     .link-form-submit {
       padding: 15px;

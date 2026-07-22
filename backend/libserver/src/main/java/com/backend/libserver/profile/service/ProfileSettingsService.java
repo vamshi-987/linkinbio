@@ -2,6 +2,7 @@ package com.backend.libserver.profile.service;
 
 import com.backend.libserver.profile.dto.ProfileSettingsResponse;
 import com.backend.libserver.profile.dto.UpdateProfileRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -15,5 +16,10 @@ public interface ProfileSettingsService {
      * must therefore send only the fields they intend to change.
      */
     void updateProfile(UUID userId, UpdateProfileRequest req);
+
+    /** Validates and stores a new avatar, replacing — and deleting — any previous upload. */
+    ProfileSettingsResponse uploadAvatar(UUID userId, MultipartFile file);
+
+    ProfileSettingsResponse deleteAvatar(UUID userId);
 
 }

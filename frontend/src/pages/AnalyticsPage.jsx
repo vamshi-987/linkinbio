@@ -4,7 +4,7 @@ import {
   Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { Link } from 'react-router-dom';
-import { getAnalyticsSummary } from '../api/analyticsApi';
+import { getAnalyticsBreakdown, getAnalyticsSummary } from '../api/analyticsApi';
 
 const BLUE = '#6ba6f5';
 const TREND = '#8fa3bd';
@@ -41,6 +41,52 @@ function withTrend(dailyClicks) {
 }
 
 const truncate = (text, max = 15) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+const regionNames = typeof Intl.DisplayNames === 'function'
+  ? new Intl.DisplayNames(undefined, { type: 'region' })
+  : null;
+
+/** 'IN' → 'India'. 'XX' is the deliberate unknown bucket, not a country. */
+const countryLabel = (code) => {
+  if (!code || code === 'XX') return 'Unknown';
+  try {
+    return regionNames?.of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
+
+const titleCase = (value) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+/**
+ * A share-of-total bar list. Country, device and referrer are all "few rows, one number each" —
+ * a chart axis would add ink without adding information, and the bars still show proportion.
+ */
+function ShareList({ rows, emptyMessage, format = (v) => v }) {
+  if (!rows.length) return <p className="an-message">{emptyMessage}</p>;
+
+  const total = rows.reduce((sum, row) => sum + row.clicks, 0) || 1;
+
+  return (
+    <ul className="an-share-list">
+      {rows.map((row) => {
+        const share = (row.clicks / total) * 100;
+        return (
+          <li key={row.label} className="an-share-row">
+            <span className="an-share-label">{format(row.label)}</span>
+            <span className="an-share-track" aria-hidden="true">
+              <span className="an-share-fill" style={{ width: `${Math.max(share, 1.5)}%` }} />
+            </span>
+            <span className="an-share-value">
+              {nf.format(row.clicks)}
+              <span className="an-share-pct">{share.toFixed(0)}%</span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -83,12 +129,17 @@ function TableView({ caption, columns, rows }) {
 
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState(null);
+  const [breakdown, setBreakdown] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     getAnalyticsSummary()
       .then(setSummary)
       .catch(() => setError('Could not load your analytics. Please try again.'));
+
+    // Fetched separately: the breakdown comes from the rollup tables and is allowed to be a little
+    // behind, so a failure here should not blank out the headline numbers.
+    getAnalyticsBreakdown().then(setBreakdown).catch(() => setBreakdown(null));
   }, []);
 
   const daily = useMemo(() => withTrend(summary?.dailyClicks ?? []), [summary]);
@@ -135,6 +186,11 @@ export default function AnalyticsPage() {
   }
 
   const hasClicks = summary.totalClicks > 0;
+  // Country and device read from the rollups, the headline number counts raw events. A null
+  // rolledUpThrough means the job has not covered this user yet, so those panels sit at zero while
+  // the total above is not — a new user's first clicks otherwise make the page look broken.
+  const rollupPending = Boolean(breakdown && !breakdown.rolledUpThrough && hasClicks);
+  const pendingMessage = 'Catching up — these refresh within about 15 minutes of your first clicks.';
   // Give every bar a fixed slot rather than letting a few bars stretch to fill a fixed height,
   // so bar thickness stays constant whether the user has 2 links or 12.
   const barChartHeight = Math.max(260, perLink.length * 46 + 60);
@@ -254,6 +310,45 @@ export default function AnalyticsPage() {
             )}
           </section>
         </div>
+
+        {breakdown && (
+          <section className="an-breakdown" aria-label="Audience breakdown">
+            <h2 className="an-section-title">Where your clicks come from</h2>
+            <div className="an-grid an-grid-three">
+              <section className="an-card">
+                <h3 className="an-card-title">Countries</h3>
+                <ShareList
+                  rows={breakdown.byCountry}
+                  format={countryLabel}
+                  emptyMessage={rollupPending ? pendingMessage : 'No location data yet.'}
+                />
+              </section>
+              <section className="an-card">
+                <h3 className="an-card-title">Devices</h3>
+                <ShareList
+                  rows={breakdown.byDevice}
+                  format={titleCase}
+                  emptyMessage={rollupPending ? pendingMessage : 'No device data yet.'}
+                />
+              </section>
+              <section className="an-card">
+                <h3 className="an-card-title">Referrers</h3>
+                <ShareList
+                  rows={breakdown.byReferrer}
+                  format={titleCase}
+                  emptyMessage="No referrer data yet."
+                />
+              </section>
+            </div>
+            <p className="an-footnote">
+              {rollupPending
+                ? 'Country and device counts are pre-aggregated and have not caught up with your'
+                  + ' latest clicks yet. Referrers are live.'
+                : `Country and device counts are pre-aggregated; they refresh every few minutes${
+                  breakdown.rolledUpThrough ? ` (last updated through ${breakdown.rolledUpThrough})` : ''}.`}
+            </p>
+          </section>
+        )}
       </div>
     </div>
   );
@@ -324,6 +419,65 @@ const styles = `
     grid-template-columns: 1.35fr 1fr;
     gap: 20px;
     align-items: start;
+  }
+  .an-grid-three {
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 16px;
+  }
+  .an-breakdown {
+    margin-top: 28px;
+  }
+  .an-section-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #f2f4f7;
+  }
+  .an-footnote {
+    margin: 14px 0 0;
+    font-size: 13px;
+    color: #868b95;
+  }
+  .an-share-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .an-share-row {
+    display: grid;
+    grid-template-columns: minmax(64px, 1fr) 2fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+  }
+  .an-share-label {
+    font-size: 14px;
+    color: #c8ccd3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .an-share-track {
+    height: 8px;
+    background: #2f333c;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .an-share-fill {
+    display: block;
+    height: 100%;
+    background: #6ba6f5;
+    border-radius: 999px;
+  }
+  .an-share-value {
+    font-size: 13px;
+    color: #e8eaee;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .an-share-pct {
+    margin-left: 8px;
+    color: #868b95;
   }
   .an-card {
     padding: 20px 22px 16px;
@@ -436,7 +590,8 @@ const styles = `
     white-space: nowrap;
   }
   @media (max-width: 900px) {
-    .an-grid {
+    .an-grid,
+    .an-grid-three {
       grid-template-columns: 1fr;
     }
   }

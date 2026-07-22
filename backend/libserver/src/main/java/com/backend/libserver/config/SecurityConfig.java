@@ -3,6 +3,7 @@ package com.backend.libserver.config;
 
 import com.backend.libserver.security.JwtAuthFilter;
 import com.backend.libserver.security.RateLimitFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +34,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/public/**", "/error").permitAll()
                         .anyRequest().authenticated()
                 )
+                // Spring's default entry point answers 403 for a missing or expired token, which the
+                // client cannot tell apart from "signed in but not allowed". 401 is what makes it
+                // clear the session is gone and the stored token should be dropped.
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        (request, response, authException) ->
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitFilter, JwtAuthFilter.class);
         return http.build();

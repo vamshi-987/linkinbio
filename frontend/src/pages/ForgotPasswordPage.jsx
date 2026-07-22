@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { forgotPassword, verifyOtp, resetPassword } from '../api/authApi';
+import { useAuth } from '../context/useAuth';
 
-const MailIcon = () => (
+const UserIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="2" y="4" width="20" height="16" rx="2" />
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
   </svg>
 );
 
@@ -31,8 +32,10 @@ const errorMessage = (err, fallback) => err?.response?.data?.error || fallback;
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState('email'); // email | otp | password | done
-  const [email, setEmail] = useState('');
+  const { username: sessionUsername } = useAuth();
+  const [step, setStep] = useState('username'); // username | otp | password | done
+  // Prefilled when logged in (changing your password from Settings), so you never re-enter it.
+  const [username, setUsername] = useState(sessionUsername || '');
   const [otp, setOtp] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [password, setPassword] = useState('');
@@ -41,15 +44,15 @@ export default function ForgotPasswordPage() {
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submitEmail = async (e) => {
+  const submitUsername = async (e) => {
     e.preventDefault();
     setError('');
     setInfo('');
-    if (!email) return;
+    if (!username.trim()) return;
     setLoading(true);
     try {
-      const { message } = await forgotPassword(email);
-      setInfo(message || 'If an account exists for that email, a reset code has been sent.');
+      const { message } = await forgotPassword(username.trim());
+      setInfo(message || 'If an account exists for that username, a reset code has been sent to its registered email.');
       setStep('otp');
     } catch (err) {
       setError(errorMessage(err, 'Something went wrong. Please try again.'));
@@ -67,7 +70,7 @@ export default function ForgotPasswordPage() {
     }
     setLoading(true);
     try {
-      const { resetToken: token } = await verifyOtp(email, otp);
+      const { resetToken: token } = await verifyOtp(username.trim(), otp);
       setResetToken(token);
       setInfo('');
       setStep('password');
@@ -104,7 +107,7 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
     try {
-      const { message } = await forgotPassword(email);
+      const { message } = await forgotPassword(username.trim());
       setInfo(message || 'A new code has been sent.');
     } catch (err) {
       setError(errorMessage(err, 'Could not resend the code.'));
@@ -119,21 +122,21 @@ export default function ForgotPasswordPage() {
       <div className="fp-card">
         <h1 className="fp-title">Reset Password</h1>
 
-        {step === 'email' && (
+        {step === 'username' && (
           <>
             <p className="fp-subtitle">
-              Enter your registered email and we'll send you a verification code.
+              Enter your username and we'll send a verification code to your registered email.
             </p>
-            <form onSubmit={submitEmail} className="fp-form">
+            <form onSubmit={submitUsername} className="fp-form">
               <div className="fp-field">
-                <span className="fp-field-icon"><MailIcon /></span>
+                <span className="fp-field-icon"><UserIcon /></span>
                 <input
                   className="fp-input"
-                  type="email"
-                  placeholder="Registered email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="Username"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
               {error && <p className="fp-error">{error}</p>}
@@ -147,7 +150,7 @@ export default function ForgotPasswordPage() {
         {step === 'otp' && (
           <>
             <p className="fp-subtitle">
-              Enter the 6-digit code sent to <strong>{email}</strong>.
+              Enter the 6-digit code sent to your registered email.
             </p>
             <form onSubmit={submitOtp} className="fp-form">
               <div className="fp-field">
