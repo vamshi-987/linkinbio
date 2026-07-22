@@ -28,4 +28,7 @@ public interface EmailVerificationService {
 
     /** The pending signup for a username, if one is awaiting verification — used by login. */
     Optional<PendingSignup> pendingSignupByUsername(String username);
+
+    /** The same lookup by email address, for logging in with an email rather than a username. */
+    Optional<PendingSignup> pendingSignupByEmail(String email);
 }

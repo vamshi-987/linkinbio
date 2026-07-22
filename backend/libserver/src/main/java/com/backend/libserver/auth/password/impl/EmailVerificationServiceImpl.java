@@ -150,6 +150,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         return pendingStore.findByUsername(username);
     }
 
+    @Override
+    public Optional<PendingSignup> pendingSignupByEmail(String email) {
+        return pendingStore.find(email);
+    }
+
     /**
      * True when a fresh code must be suppressed: within the resend cooldown of the last one, or past
      * the hourly ceiling for this email. Silent — callers behave identically either way so this

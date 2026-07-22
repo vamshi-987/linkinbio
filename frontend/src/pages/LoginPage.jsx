@@ -19,7 +19,8 @@ const LockIcon = () => (
 );
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  // Either a username or an email address; the server works out which.
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -29,7 +30,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-      await login(username, password);
+      await login(identifier, password);
       navigate('/dashboard');
     } catch (err) {
       // Credentials were right but the email was never confirmed: the backend has just sent a
@@ -54,8 +55,8 @@ export default function LoginPage() {
               className="login-input"
               placeholder="Username or Email"
               autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
             />
           </div>
           <div className="login-field">

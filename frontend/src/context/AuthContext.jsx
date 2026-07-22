@@ -12,8 +12,9 @@ export function AuthProvider({ children }) {
     setUsername(data.username);
   };
 
-  const login = async (username, password) => {
-    const { data } = await axiosClient.post('/auth/login', { username, password });
+  /** `identifier` is either a username or an email address — the server accepts both. */
+  const login = async (identifier, password) => {
+    const { data } = await axiosClient.post('/auth/login', { identifier, password });
     storeSession(data);
   };
 

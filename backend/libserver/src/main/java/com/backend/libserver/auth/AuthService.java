@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -47,14 +48,15 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest req) {
-        String username = req.username().toLowerCase();
+        String identifier = req.identifier().trim();
 
-        User user = userRepository.findByUsername(username).orElse(null);
+        User user = findByIdentifier(identifier).orElse(null);
         if (user == null) {
-            // No account with that username — but there may be a pending (unverified) signup. Only
-            // reveal that, and resend its code, once the password matches, so this never leaks who
-            // has a signup in flight. Otherwise it is indistinguishable from wrong credentials.
-            emailVerificationService.pendingSignupByUsername(username)
+            // Nothing registered under that identifier — but there may be a pending (unverified)
+            // signup. Only reveal that, and resend its code, once the password matches, so this
+            // never leaks who has a signup in flight. Otherwise it is indistinguishable from wrong
+            // credentials.
+            pendingSignupFor(identifier)
                     .filter(pending -> passwordEncoder.matches(req.password(), pending.passwordHash()))
                     .ifPresent(pending -> {
                         emailVerificationService.resendCode(pending.email());
@@ -69,5 +71,25 @@ public class AuthService {
 
         String token = jwtService.generateToken(user.getId(), user.getUsername());
         return new AuthResponse(token, user.getUsername());
+    }
+
+    /**
+     * Usernames cannot contain "@" (enforced by the signup pattern), so the symbol is a reliable
+     * discriminator: no input can ever match both a username and an email address.
+     */
+    private boolean looksLikeEmail(String identifier) {
+        return identifier.indexOf('@') >= 0;
+    }
+
+    private Optional<User> findByIdentifier(String identifier) {
+        return looksLikeEmail(identifier)
+                ? userRepository.findByEmailIgnoreCase(identifier)
+                : userRepository.findByUsername(identifier.toLowerCase());
+    }
+
+    private Optional<PendingSignup> pendingSignupFor(String identifier) {
+        return looksLikeEmail(identifier)
+                ? emailVerificationService.pendingSignupByEmail(identifier)
+                : emailVerificationService.pendingSignupByUsername(identifier.toLowerCase());
     }
 }
