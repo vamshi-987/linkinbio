@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-
-const themes = {
-  default: { bg: '#22262b', text: '#ffffff', sub: '#aeb4bd', btn: '#4a4f57', btnText: '#eef0f3' },
-  dark: { bg: '#0f1114', text: '#ffffff', sub: '#9aa0ab', btn: '#242830', btnText: '#eef0f3' },
-  pastel: { bg: '#fdf2f6', text: '#2d2a32', sub: '#6f6a76', btn: '#f4c9db', btnText: '#3a2b33' },
-  neon: { bg: '#05060a', text: '#39ff14', sub: '#7bffb0', btn: '#0d1f16', btnText: '#39ff14' },
-};
+import { themeFor, themeVars, themes } from '../theme/themes';
 
 /**
  * Only a 404 means the page does not exist. Showing "not found" for a rate limit or a server error
@@ -58,7 +52,7 @@ export default function PublicProfilePage() {
   }
 
   const { profile } = current;
-  const theme = themes[profile.theme] || themes.default;
+  const theme = themeFor(profile.theme);
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api';
   const links = Array.isArray(profile.links) ? profile.links : [];
 
@@ -86,18 +80,20 @@ export default function PublicProfilePage() {
             </a>
           ))}
         </div>
+
+        {/* Sits under the creator's own links, in their palette, so it reads as part of the page
+            rather than an ad pasted on top of it. */}
+        <div className="pp-cta">
+          <p className="pp-cta-text">Want a page like this?</p>
+          <Link to="/signup" className="pp-cta-btn">
+            Claim your free OneLink
+            <span className="pp-cta-arrow" aria-hidden="true">→</span>
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
-
-const themeVars = (t) => ({
-  '--pp-bg': t.bg,
-  '--pp-text': t.text,
-  '--pp-sub': t.sub,
-  '--pp-btn': t.btn,
-  '--pp-btn-text': t.btnText,
-});
 
 const styles = `
   .pp-screen {
@@ -155,7 +151,7 @@ const styles = `
     color: var(--pp-btn-text);
     text-decoration: none;
     background: var(--pp-btn);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--pp-border);
     border-radius: 12px;
     transition: filter 0.2s, box-shadow 0.2s, transform 0.1s;
   }
@@ -183,6 +179,56 @@ const styles = `
     font-size: 18px;
     color: var(--pp-sub);
   }
+  .pp-cta {
+    margin-top: 52px;
+    padding-top: 30px;
+    border-top: 1px solid var(--pp-border);
+  }
+  .pp-cta-text {
+    margin: 0 0 14px;
+    font-size: 15px;
+    color: var(--pp-sub);
+  }
+  .pp-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 13px 26px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--pp-accent-text);
+    text-decoration: none;
+    background: var(--pp-accent);
+    border-radius: 999px;
+    transition: filter 0.2s, box-shadow 0.2s, transform 0.15s;
+  }
+  .pp-cta-btn:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -8px var(--pp-accent);
+  }
+  .pp-cta-btn:active {
+    transform: translateY(0);
+    filter: brightness(0.96);
+  }
+  .pp-cta-arrow {
+    transition: transform 0.2s;
+  }
+  .pp-cta-btn:hover .pp-cta-arrow {
+    transform: translateX(3px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pp-cta-btn,
+    .pp-cta-arrow {
+      transition: none;
+    }
+    .pp-cta-btn:hover {
+      transform: none;
+    }
+    .pp-cta-btn:hover .pp-cta-arrow {
+      transform: none;
+    }
+  }
   @media (max-width: 600px) {
     .pp-name {
       font-size: 48px;
@@ -197,6 +243,10 @@ const styles = `
     .pp-link {
       font-size: 17px;
       padding: 14px 18px;
+    }
+    .pp-cta {
+      margin-top: 40px;
+      padding-top: 24px;
     }
   }
 `;

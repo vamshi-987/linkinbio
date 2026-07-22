@@ -40,9 +40,10 @@ public class ProfileSettingsServiceImpl implements ProfileSettingsService {
     public void updateProfile(UUID userId, UpdateProfileRequest req) {
         User user = requireUser(userId);
 
-        // Name and bio are @NotBlank, so they are always present and meaningful here.
+        // The name is @NotBlank, so it is always present and meaningful here. Bio and theme are
+        // applied only when the client actually sent them.
         user.setDisplayName(req.displayName().trim());
-        user.setBio(req.bio().trim());
+        if (req.bio() != null) user.setBio(req.bio().trim());
         if (req.theme() != null) user.setTheme(req.theme());
 
         userRepository.save(user);

@@ -49,6 +49,13 @@ public class LinkServiceImpl implements LinkService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
 
+        // A page with links but no display name is the one state a visitor should never land on,
+        // so the name is required before the first link rather than nagged about afterwards. The
+        // dashboard gates on this too; enforcing it here is what makes it true for the API itself.
+        if (user.getDisplayName() == null || user.getDisplayName().isBlank()) {
+            throw new IllegalArgumentException("Set a display name before adding links");
+        }
+
         List<Link> existing = linkRepository.findAllByUserIdOrderByPositionAsc(userId);
         int nextPosition = existing.isEmpty()
                 ? 0

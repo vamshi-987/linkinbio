@@ -4,6 +4,8 @@ import {
 } from '../api/linksApi';
 import LinkForm from '../components/LinkForm';
 import LinkList from '../components/LinkList';
+import DisplayNameGate from '../components/DisplayNameGate';
+import { getProfile } from '../api/profileApi';
 import { useAuth } from '../context/useAuth';
 import { Link } from 'react-router-dom';
 
@@ -13,12 +15,75 @@ export default function DashboardPage() {
   const [links, setLinks] = useState([]);
   const [showQr, setShowQr] = useState(false);
   const [reorderError, setReorderError] = useState('');
+  const [shareNote, setShareNote] = useState('');
+  // null while the profile is in flight: the link tools and the naming prompt are both wrong to
+  // show before we know which one applies.
+  const [needsName, setNeedsName] = useState(null);
   const { username, logout } = useAuth();
+
+  const publicUrl = `${window.location.origin}/${username}`;
+  const qrUrl = (size) => `${API_BASE}/public/qr/profile/${username}?size=${size}`;
+
+  const note = (message) => {
+    setShareNote(message);
+    setTimeout(() => setShareNote(''), 2200);
+  };
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      note('Link copied to clipboard');
+    } catch {
+      note('Could not copy — select the link above and copy it manually.');
+    }
+  };
+
+  /** Hands off to the OS share sheet where there is one; elsewhere copying is the useful fallback. */
+  const sharePage = async () => {
+    if (!navigator.share) {
+      await copyUrl();
+      return;
+    }
+    try {
+      await navigator.share({
+        title: `${username} on OneLink`,
+        text: 'Check out all my links in one place:',
+        url: publicUrl,
+      });
+    } catch (err) {
+      // Dismissing the sheet rejects too, and that is not a failure worth reporting.
+      if (err.name !== 'AbortError') await copyUrl();
+    }
+  };
+
+  const shareQr = async () => {
+    try {
+      const response = await fetch(qrUrl(1024));
+      if (!response.ok) throw new Error('QR unavailable');
+      const file = new File([await response.blob()], `${username}-qr.png`, { type: 'image/png' });
+
+      // Not every platform accepts files in a share sheet, so the capability is checked with the
+      // actual file rather than assumed from navigator.share alone.
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `${username} on OneLink` });
+        return;
+      }
+      note('Sharing images is not supported here — use Download PNG instead.');
+    } catch (err) {
+      if (err.name !== 'AbortError') note('Could not share the QR code. Try downloading it instead.');
+    }
+  };
 
   useEffect(() => {
     getLinks()
       .then((data) => setLinks(Array.isArray(data) ? data : []))
       .catch(() => setLinks([]));
+
+    getProfile()
+      .then((profile) => setNeedsName(!profile.displayName?.trim()))
+      // The server rejects link creation without a name regardless, so a failed check falls through
+      // to the normal dashboard rather than locking someone out of their own links.
+      .catch(() => setNeedsName(false));
   }, []);
 
   const handleAdd = async (data) => {
@@ -95,49 +160,78 @@ export default function DashboardPage() {
       </header>
 
       <main className="dash-container">
-        <h1 className="dash-title">Add New Link</h1>
-        <LinkForm onAdd={handleAdd} />
-        {reorderError && <p className="link-list-error" role="alert">{reorderError}</p>}
-        <LinkList
-          links={links}
-          onUpdate={handleUpdate}
-          onDelete={handleDelete}
-          onToggleActive={handleToggleActive}
-          onMoveUp={(i) => i > 0 && swap(i, i - 1)}
-          onMoveDown={(i) => i < links.length - 1 && swap(i, i + 1)}
-          onUploadThumbnail={handleUploadThumbnail}
-          onRemoveThumbnail={handleRemoveThumbnail}
-        />
+        {needsName === null && <p className="dash-loading">Loading…</p>}
 
-        <section className="dash-qr">
-          <button
-            type="button"
-            className="dash-qr-toggle"
-            aria-expanded={showQr}
-            onClick={() => setShowQr((on) => !on)}
-          >
-            {showQr ? 'Hide QR code' : 'Show QR code for my page'}
-          </button>
-          {showQr && (
-            <div className="dash-qr-body">
-              {/* Generated server-side and cached, so this is a plain image request. */}
-              <img
-                src={`${API_BASE}/public/qr/profile/${username}?size=320`}
-                alt={`QR code linking to ${username}'s page`}
-                className="dash-qr-image"
-                width="320"
-                height="320"
-              />
-              <a
-                className="dash-qr-download"
-                href={`${API_BASE}/public/qr/profile/${username}?size=1024`}
-                download={`${username}-qr.png`}
-              >
-                Download PNG
-              </a>
-            </div>
-          )}
-        </section>
+        {needsName && (
+          <DisplayNameGate username={username} onSaved={() => setNeedsName(false)} />
+        )}
+
+        {needsName === false && (
+          <>
+            <h1 className="dash-title">Add New Link</h1>
+            <LinkForm onAdd={handleAdd} />
+            {reorderError && <p className="link-list-error" role="alert">{reorderError}</p>}
+            <LinkList
+              links={links}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+              onToggleActive={handleToggleActive}
+              onMoveUp={(i) => i > 0 && swap(i, i - 1)}
+              onMoveDown={(i) => i < links.length - 1 && swap(i, i + 1)}
+              onUploadThumbnail={handleUploadThumbnail}
+              onRemoveThumbnail={handleRemoveThumbnail}
+            />
+
+            <section className="dash-share">
+              <h2 className="dash-share-title">Share your page</h2>
+              <p className="dash-share-url">{publicUrl}</p>
+
+              <div className="dash-share-actions">
+                <button type="button" className="dash-share-btn is-primary" onClick={sharePage}>
+                  Share page
+                </button>
+                <button type="button" className="dash-share-btn" onClick={copyUrl}>
+                  Copy link
+                </button>
+                <button
+                  type="button"
+                  className="dash-share-btn"
+                  aria-expanded={showQr}
+                  onClick={() => setShowQr((on) => !on)}
+                >
+                  {showQr ? 'Hide QR code' : 'Show QR code'}
+                </button>
+              </div>
+
+              <p className="dash-share-note" role="status">{shareNote}</p>
+
+              {showQr && (
+                <div className="dash-qr-body">
+                  {/* Generated server-side and cached, so this is a plain image request. */}
+                  <img
+                    src={qrUrl(320)}
+                    alt={`QR code linking to ${username}'s page`}
+                    className="dash-qr-image"
+                    width="320"
+                    height="320"
+                  />
+                  <div className="dash-share-actions">
+                    <button type="button" className="dash-share-btn" onClick={shareQr}>
+                      Share QR
+                    </button>
+                    <a
+                      className="dash-share-btn"
+                      href={qrUrl(1024)}
+                      download={`${username}-qr.png`}
+                    >
+                      Download PNG
+                    </a>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
@@ -473,24 +567,225 @@ const dashboardStyles = `
     gap: 10px;
     flex-basis: 100%;
   }
-  .dash-qr {
-    margin-top: 28px;
+  .dash-loading {
+    margin-top: 48px;
     text-align: center;
+    font-size: 16px;
+    color: #9aa0ab;
   }
-  .dash-qr-toggle {
+  .gate {
+    max-width: 520px;
+    margin: 40px auto 0;
+    padding: 36px 32px;
+    text-align: center;
+    background: #23262d;
+    border: 1px solid #2f333c;
+    border-radius: 18px;
+  }
+  .gate-title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #f2f4f7;
+  }
+  .gate-lead {
+    margin: 14px 0 28px;
+    font-size: 16px;
+    line-height: 1.55;
+    color: #9aa0ab;
+  }
+  .gate-lead strong {
+    font-weight: 600;
+    color: #9dc0ff;
+  }
+  .gate-form {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+  }
+  .gate-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 26px;
+  }
+  .gate-avatar {
+    width: 76px;
+    height: 76px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid #3a3e46;
+  }
+  .gate-avatar-empty {
+    background: #1e2127;
+  }
+  .gate-avatar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .gate-secondary {
+    padding: 9px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    color: #e8eaee;
+    background: #2b2f37;
+    border: 1px solid #3a3e46;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .gate-secondary:hover:not(:disabled) {
+    background: #333944;
+  }
+  .gate-secondary:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .gate-secondary.is-remove:hover:not(:disabled) {
+    color: #f87171;
+  }
+  .gate-hint {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 13px;
+    color: #868b95;
+  }
+  .gate-label {
+    margin-bottom: 8px;
+    font-size: 15px;
+    color: #c8ccd3;
+  }
+  .gate-optional {
+    color: #868b95;
+  }
+  .gate-textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+  .gate-input:disabled,
+  .gate-textarea:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .gate-input {
+    box-sizing: border-box;
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 17px;
+    color: #e8eaee;
+    background: #1e2127;
+    border: 1px solid #3a3e46;
+    border-radius: 12px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .gate-input::placeholder {
+    color: #868b95;
+  }
+  .gate-input:focus {
+    border-color: #5b8def;
+    box-shadow: 0 0 0 3px rgba(91, 141, 239, 0.2);
+  }
+  .gate-submit {
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 17px;
+    font-weight: 500;
+    color: #fff;
+    background: #3b71d8;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: filter 0.2s;
+  }
+  .gate-submit:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .gate-submit:disabled {
+    background: #33415e;
+    color: #9aa0ab;
+    cursor: default;
+  }
+  .gate-error {
+    margin: 12px 0 0;
+    text-align: center;
+    font-size: 15px;
+    color: #f87171;
+  }
+  .gate-error.is-inline {
+    flex-basis: 100%;
+    margin: 0;
+    text-align: left;
+    font-size: 14px;
+  }
+  .gate-note {
+    margin: 22px 0 0;
+    font-size: 14px;
+    color: #868b95;
+  }
+  .dash-share {
+    margin-top: 32px;
+    padding: 24px;
+    text-align: center;
+    background: #23262d;
+    border: 1px solid #2f333c;
+    border-radius: 16px;
+  }
+  .dash-share-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #f2f4f7;
+  }
+  .dash-share-url {
+    margin: 8px 0 18px;
+    font-size: 15px;
+    color: #9dc0ff;
+    overflow-wrap: anywhere;
+  }
+  .dash-share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .dash-share-btn {
     padding: 10px 20px;
     font-family: inherit;
     font-size: 15px;
+    font-weight: 500;
     color: #c8ccd3;
+    text-decoration: none;
     background: #2b2f37;
     border: 1px solid #3a3e46;
     border-radius: 10px;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.2s, color 0.2s, filter 0.2s;
   }
-  .dash-qr-toggle:hover {
+  .dash-share-btn:hover {
     background: #333944;
     color: #f2f4f7;
+  }
+  .dash-share-btn.is-primary {
+    color: #fff;
+    background: #3b71d8;
+    border-color: #3b71d8;
+  }
+  .dash-share-btn.is-primary:hover {
+    background: #3b71d8;
+    filter: brightness(1.08);
+  }
+  /* Reserves its line so showing a message does not shift the buttons above it. */
+  .dash-share-note {
+    min-height: 20px;
+    margin: 12px 0 0;
+    font-size: 14px;
+    color: #4ade80;
   }
   .dash-qr-body {
     display: flex;
@@ -505,14 +800,6 @@ const dashboardStyles = `
     padding: 12px;
     background: #fff;
     border-radius: 14px;
-  }
-  .dash-qr-download {
-    font-size: 15px;
-    color: #9dc0ff;
-    text-decoration: none;
-  }
-  .dash-qr-download:hover {
-    text-decoration: underline;
   }
   .link-edit-input {
     flex: 1;
